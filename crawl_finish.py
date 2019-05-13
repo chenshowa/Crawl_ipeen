@@ -11,14 +11,8 @@ import pandas as pd
 
 from urllib.request import urlretrieve
 
-
+# the list contains Store category you want to crawl
 big_cate=[
-# '其他類型buffet自助餐',
-# '中式',
-# '日式',
-# '西式',
-# '複合式',
-# '碗粿',
 '鹹酥雞、炸雞排',
 '筒仔米糕',
 '藥燉排骨',
@@ -49,7 +43,6 @@ source_url="http://www.ipeen.com.tw/"
 
 def want_to_get_shoplink(cate_all_page,kind):
 	shop_link=[]
-
 	for each_cate in cate_all_page:
 		cate_html=requests.get(each_cate)
 		cate_bf=BeautifulSoup(cate_html.text,"html.parser")
@@ -60,27 +53,26 @@ def want_to_get_shoplink(cate_all_page,kind):
 
 	return shop_link,kind
 
-
-# input the category all shop unique link list
-# output the category all shop contents dict
 def crowl_store_content(cate_all_page):
-
-
+        """method to crawl information of stores
+        Parameters
+        ---------
+        X : list-like
+            the category all shop unique link
+        Returns
+        -------
+        dict_store_content : dict-like
+            the category all shop contents dict
+        """
 	q = pq(cate_all_page)
 	columns_name = q('th').text()
 	columns_name = [item for item in columns_name.split(" ") if item.split()]
-
 	columns_name_content = q('td').text()
-
-
-
 	neg_text_list = [item for item in columns_name_content.split(" ") if item.split()]
-
 	dict_store_content = {}
 	start = (neg_text_list.index(">")-2)
-
+	
 	for i in range(len(columns_name)):
-
 		columns = columns_name.pop(0)
 
 		if columns=='商家名稱':
@@ -99,7 +91,6 @@ def crowl_store_content(cate_all_page):
 		elif columns=='地址':
 			dict_store_content['地址']=neg_text_list[start]
 			start = start+1
-
 		elif columns=='公休日':
 			dict_store_content['公休日']=neg_text_list[start]
 		elif columns=='營業時間':
@@ -112,31 +103,33 @@ def crowl_store_content(cate_all_page):
 		start = start + 1
 		dict_store_content['網址']=cate_all_page
 
-
 	return dict_store_content
 
-
-# input photo page url
-# output the store photo urls list
 def crawl_page_photo(cate_all_shop_link_unique):
-
-#     for each_url in cate_all_shop_link_unique:   # if input is list
-
+        """method to crawl photo URLs of stores
+        Parameters
+        ---------
+        X : string-like
+            photo page URLs
+        Returns
+        -------
+        dict_store_content : list-like
+            the store photo of URLs
+        """
+     for each_url in cate_all_shop_link_unique:  
 	each_url = cate_all_shop_link_unique
-
 	store_html=requests.get(each_url)
 	time.sleep(3)
 	store_bf=BeautifulSoup(store_html.text,"html.parser")
+	
 	try:
 		store_photo_page_url = 'http://www.ipeen.com.tw'+ [tag['href'] for tag in store_bf.find_all("a", {"href":re.compile("photos")})][0]
-
 		store_photo_url = store_photo_page_url
 		store_photo_html=requests.get(store_photo_url)
 		time.sleep(3)
 		store_photo_bf=BeautifulSoup(store_photo_html.text,"html.parser")
 		photo_urls = [tag['href'] for tag in store_photo_bf.find_all("a", {"data-label":"分享文照片"})]
 		photo_urls2 = [tag['href'] for tag in store_photo_bf.find_all("a", {"data-label":"即時愛評照片"})]
-
 		photo_urls.extend(photo_urls2)
 
 		return photo_urls
@@ -149,7 +142,6 @@ if __name__ =='__main__':
 	response=requests.get(url)
 	Soup=BeautifulSoup(response.text,"html.parser")
 	texts = Soup.find_all('a',class_='a37 ga_tracking')
-
 	food_cate_url=[] #category
 	food_cate_string=[]
 	for option in texts:
@@ -158,9 +150,6 @@ if __name__ =='__main__':
 			if(option.text  in  big_cate):
 				food_cate_url.append(source_url+option['href'])
 				food_cate_string.append(option.text)
-#	print("food_cate_len:",len(food_cate_string))    # small cate number
-#	print("food_cate_string",food_cate_string)       # small cate chinese
-
 
 	for order, cate in enumerate(food_cate_url):
 		print("cate_chinese:",food_cate_string[order])#enter find each cate
@@ -173,29 +162,23 @@ if __name__ =='__main__':
 			next_page=cate_bf.find('label',class_="next_p_s").find('a',class_="ga_tracking")
 			this_cate_final_page=next_page['href']
 			this_cate_final_page_number = re.findall("(=[0-9]+[0-9]*[0-9]*)", this_cate_final_page)[0][1:]
-
 			want_togo_cate_page=[]
 			for i in range(1,int(this_cate_final_page_number)):
 				want_togo_cate_page.append(cate+"?p="+str(i))
 		except:
 			print('這個類別只有一頁')
 			want_togo_cate_page=[cate]
-
 		#print("small_cate_url:",want_togo_cate_page)
 		cate_all_shop_link, kind = want_to_get_shoplink(want_togo_cate_page,food_cate_string[order])
 		cate_all_shop_link_unique = pd.Series(cate_all_shop_link).unique().tolist()
-
 		cate_json=[]
+		
 		for shop_url in cate_all_shop_link_unique:
 			try:
 				store_content = crowl_store_content(shop_url)
 			except:
 				continue
-		#	print(store_content['商家名稱'])
 			cate_json.append(store_content)
-			#print(cate_json)
-			#print("shop:",shop_url)
-
 			the_store_photo_list= crawl_page_photo(shop_url)
 			for i,j in enumerate(the_store_photo_list):
 				#print("photo:",i)
